@@ -170,27 +170,21 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('abondance_user')) } catch { return null }
   })
-  const [fadein, setFadein] = useState(() => {
-    try { return !!localStorage.getItem('abondance_user') } catch { return false }
-  })
 
   function handleLogin(u) {
+    localStorage.setItem('abondance_user', JSON.stringify(u))
     setUser(u)
-    setTimeout(() => setFadein(true), 50)
+  }
+
+  function logout() {
+    localStorage.removeItem('abondance_user')
+    setUser(null)
   }
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const restaurant = RESTAURANTS[restaurantIdx]
-
-  function logout() {
-    setFadein(false)
-    setTimeout(() => {
-      localStorage.removeItem('abondance_user')
-      setUser(null)
-    }, 300)
-  }
 
   async function startRecording() {
     try {
@@ -273,16 +267,10 @@ export default function App() {
 
   const isEmpty = messages.length === 0
 
-  return (
-    <>
-      {/* Login overlay — affiché par-dessus sans démonter l'app */}
-      {!user && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LoginScreen onLogin={handleLogin} />
-        </div>
-      )}
+  if (!user) return <LoginScreen onLogin={handleLogin} />
 
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative', opacity: fadein ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative' }}>
 
       {/* Ambient glow */}
       <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: 600, height: 300, background: 'radial-gradient(ellipse at 50% 0%, rgba(200,169,110,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
@@ -482,6 +470,5 @@ export default function App() {
         </div>
       </div>
     </div>
-    </>
   )
 }
