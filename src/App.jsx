@@ -186,11 +186,12 @@ export default function App() {
   const chunksRef = useRef([])
   const restaurant = RESTAURANTS[restaurantIdx]
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />
-
   function logout() {
-    localStorage.removeItem('abondance_user')
-    setUser(null)
+    setFadein(false)
+    setTimeout(() => {
+      localStorage.removeItem('abondance_user')
+      setUser(null)
+    }, 300)
   }
 
   async function startRecording() {
@@ -275,7 +276,15 @@ export default function App() {
   const isEmpty = messages.length === 0
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative', opacity: fadein ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+    <>
+      {/* Login overlay — affiché par-dessus sans démonter l'app */}
+      {!user && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <LoginScreen onLogin={handleLogin} />
+        </div>
+      )}
+
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative', opacity: fadein ? 1 : 0, transition: 'opacity 0.3s ease' }}>
 
       {/* Ambient glow */}
       <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: 600, height: 300, background: 'radial-gradient(ellipse at 50% 0%, rgba(200,169,110,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
@@ -475,5 +484,6 @@ export default function App() {
         </div>
       </div>
     </div>
+    </>
   )
 }
