@@ -170,16 +170,14 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('abondance_user')) } catch { return null }
   })
-  const [fadein, setFadein] = useState(false)
+  const [fadein, setFadein] = useState(() => {
+    try { return !!localStorage.getItem('abondance_user') } catch { return false }
+  })
 
   function handleLogin(u) {
     setUser(u)
     setTimeout(() => setFadein(true), 50)
   }
-
-  useEffect(() => {
-    if (user) setFadein(true)
-  }, [])
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const mediaRecorderRef = useRef(null)
