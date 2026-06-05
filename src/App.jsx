@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Square } from 'lucide-react'
+import { Send, Square, Mic, StopCircle } from 'lucide-react'
 import { useAgentStream } from './hooks/useAgentStream.js'
 import { StructuredResponse } from './components/StructuredResponse.jsx'
 import { ToolCallIndicator } from './components/ToolCallIndicator.jsx'
@@ -103,9 +103,75 @@ export default function App() {
   const { messages, streaming, toolCalls, sendMessage, abort } = useAgentStream()
   const [input, setInput] = useState('')
   const [restaurantIdx, setRestaurantIdx] = useState(0)
+  const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
   const restaurant = RESTAURANTS[restaurantIdx]
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      chunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        await transcribeAudio(blob)
+      }
+      mr.start()
+      mediaRecorderRef.current = mr
+      setRecording(true)
+    } catch (err) {
+      alert("Microphone non disponible : " + err.message)
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop()
+    setRecording(false)
+  }
+
+  async function transcribeAudio(blob) {
+    setTranscribing(true)
+    try {
+      const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://n8n.srv1626933.hstgr.cloud/webhook/4527b82c-94d4-43aa-a9c5-80e471472ee9'
+      const transcribeUrl = WEBHOOK_URL.replace('/webhook/', '/webhook/').split('?')[0] + '/transcribe'
+      const reader = new FileReader()
+      reader.readAsDataURL(blob)
+      reader.onloadend = async () => {
+        const base64 = reader.result.split(',')[1]
+        const res = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio_base64: base64,
+            phone: restaurant.id,
+            source: 'web',
+            transcribe_only: true
+          })
+        })
+        const data = await res.json()
+        const text = data.transcript || data.text || data.output || ''
+        if (text) {
+          setInput(prev => prev ? prev + ' ' + text : text)
+          textareaRef.current?.focus()
+        }
+        setTranscribing(false)
+      }
+    } catch (err) {
+      console.error('Transcription error', err)
+      setTranscribing(false)
+    }
+  }
+
+  function toggleMic() {
+    if (recording) stopRecording()
+    else startRecording()
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -287,6 +353,22 @@ export default function App() {
               caretColor: '#C8A96E'
             }}
           />
+          <button
+            onClick={toggleMic}
+            disabled={streaming || transcribing}
+            title={recording ? "Arrêter l'enregistrement" : "Dicter un message"}
+            style={{
+              width: 36, height: 36, borderRadius: 10, border: 'none',
+              background: recording ? 'rgba(248,113,113,0.15)' : transcribing ? 'rgba(200,169,110,0.1)' : 'transparent',
+              color: recording ? '#F87171' : transcribing ? '#C8A96E' : 'var(--muted)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, transition: 'all .15s', cursor: 'pointer',
+              border: recording ? '1px solid rgba(248,113,113,0.3)' : '1px solid transparent',
+              animation: recording ? 'pulse 1.2s ease-in-out infinite' : 'none'
+            }}>
+            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
+            {recording ? <StopCircle size={14} /> : <Mic size={14} />}
+          </button>
           <button onClick={streaming ? abort : submit}
             disabled={!streaming && !input.trim()}
             style={{
@@ -301,7 +383,7 @@ export default function App() {
           </button>
         </div>
         <div style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'center', marginTop: '8px', letterSpacing: '.03em' }}>
-          Entrée pour envoyer · Maj+Entrée pour saut de ligne
+          Entrée pour envoyer · Maj+Entrée pour saut de ligne · 🎙 pour dicter
         </div>
       </div>
     </div>
