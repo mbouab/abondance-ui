@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 
-const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://mbouab.app.n8n.cloud/webhook/abondance-chat'
+const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://n8n.srv1626933.hstgr.cloud/webhook/4527b82c-94d4-43aa-a9c5-80e471472ee9'
 
 export function useAgentStream() {
   const [messages, setMessages] = useState([])
@@ -8,9 +8,9 @@ export function useAgentStream() {
   const [toolCalls, setToolCalls] = useState([])
   const abortRef = useRef(null)
 
-  const sendMessage = useCallback(async (text, phone = '33782699905') => {
+  const sendMessage = useCallback(async (text, phone = '33782699905', audioBlob = null) => {
     // Add user message
-    const userMsg = { id: Date.now(), role: 'user', content: text, ts: new Date() }
+    const userMsg = { id: Date.now(), role: 'user', content: audioBlob ? '🎙 Message vocal' : text, ts: new Date() }
     setMessages(prev => [...prev, userMsg])
     setStreaming(true)
     setToolCalls([])
@@ -31,10 +31,24 @@ export function useAgentStream() {
       const ctrl = new AbortController()
       abortRef.current = ctrl
 
+      // Build body — audio or text
+      let body
+      if (audioBlob) {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result.split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(audioBlob)
+        })
+        body = { audio_base64: base64, audio_mime: 'audio/webm', phone, source: 'web' }
+      } else {
+        body = { message: text, phone, source: 'web' }
+      }
+
       const res = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, phone, source: 'web' }),
+        body: JSON.stringify(body),
         signal: ctrl.signal
       })
 
@@ -65,7 +79,6 @@ export function useAgentStream() {
               const evt = JSON.parse(data)
               handleEvent(evt, assistantId)
             } catch {
-              // raw text delta
               if (data) {
                 setMessages(prev => prev.map(m =>
                   m.id === assistantId
@@ -80,12 +93,10 @@ export function useAgentStream() {
         // JSON mode (non-streaming fallback)
         const json = await res.json()
 
-        // Case 1: n8n returns { output: "...", structured: {...} }
         let structured = json.structured || null
         let textContent = json.output || json.text || json.response || ''
 
         if (!structured) {
-          // Case 2: output is a JSON string containing {output, structured}
           try {
             const parsed = JSON.parse(textContent)
             if (parsed.structured) {
