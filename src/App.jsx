@@ -187,16 +187,12 @@ export default function App() {
   const restaurant = RESTAURANTS[restaurantIdx]
 
   async function startRecording() {
+    if (recording || streaming) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
       chunksRef.current = []
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        await transcribeAudio(blob)
-      }
       mr.start()
       mediaRecorderRef.current = mr
       setRecording(true)
@@ -205,16 +201,24 @@ export default function App() {
     }
   }
 
-  function stopRecording() {
-    mediaRecorderRef.current?.stop()
+  async function stopAndSend() {
+    if (!recording) return
     setRecording(false)
+    const mr = mediaRecorderRef.current
+    if (!mr) return
+    mr.onstop = async () => {
+      mr.stream?.getTracks().forEach(t => t.stop())
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+      if (blob.size < 1000) return // trop court, ignorer
+      await sendAudio(blob)
+    }
+    mr.stop()
   }
 
-  async function transcribeAudio(blob) {
+  async function sendAudio(blob) {
     setTranscribing(true)
     try {
       const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://n8n.srv1626933.hstgr.cloud/webhook/4527b82c-94d4-43aa-a9c5-80e471472ee9'
-      const transcribeUrl = WEBHOOK_URL.replace('/webhook/', '/webhook/').split('?')[0] + '/transcribe'
       const reader = new FileReader()
       reader.readAsDataURL(blob)
       reader.onloadend = async () => {
@@ -224,7 +228,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             audio_base64: base64,
-            phone: restaurant.id,
+            phone: user.login,
             source: 'web',
             transcribe_only: true
           })
@@ -232,20 +236,15 @@ export default function App() {
         const data = await res.json()
         const text = data.transcript || data.text || data.output || ''
         if (text) {
-          setInput(prev => prev ? prev + ' ' + text : text)
-          textareaRef.current?.focus()
+          const fullText = restaurant.id !== 'tous' ? `${text} (restaurant: ${restaurant.id})` : text
+          sendMessage(fullText, user.login)
         }
         setTranscribing(false)
       }
     } catch (err) {
-      console.error('Transcription error', err)
+      console.error('Audio send error', err)
       setTranscribing(false)
     }
-  }
-
-  function toggleMic() {
-    if (recording) stopRecording()
-    else startRecording()
   }
 
   useEffect(() => {
@@ -437,20 +436,28 @@ export default function App() {
             }}
           />
           <button
-            onClick={toggleMic}
+            onMouseDown={startRecording}
+            onMouseUp={stopAndSend}
+            onMouseLeave={recording ? stopAndSend : undefined}
+            onTouchStart={e => { e.preventDefault(); startRecording() }}
+            onTouchEnd={e => { e.preventDefault(); stopAndSend() }}
             disabled={streaming || transcribing}
-            title={recording ? "Arrêter l'enregistrement" : "Dicter un message"}
+            title="Maintenir pour dicter"
             style={{
               width: 36, height: 36, borderRadius: 10, border: 'none',
-              background: recording ? 'rgba(248,113,113,0.15)' : transcribing ? 'rgba(200,169,110,0.1)' : 'transparent',
+              background: recording ? 'rgba(248,113,113,0.2)' : transcribing ? 'rgba(200,169,110,0.15)' : 'transparent',
               color: recording ? '#F87171' : transcribing ? '#C8A96E' : 'var(--muted)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0, transition: 'all .15s', cursor: 'pointer',
-              border: recording ? '1px solid rgba(248,113,113,0.3)' : '1px solid transparent',
-              animation: recording ? 'pulse 1.2s ease-in-out infinite' : 'none'
+              border: recording ? '1px solid rgba(248,113,113,0.4)' : '1px solid transparent',
+              transform: recording ? 'scale(1.15)' : 'scale(1)',
+              userSelect: 'none', WebkitUserSelect: 'none'
             }}>
-            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
-            {recording ? <StopCircle size={14} /> : <Mic size={14} />}
+            <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+            {transcribing
+              ? <span style={{ fontSize: 10, animation: 'pulse 0.8s infinite' }}>…</span>
+              : <Mic size={14} style={{ animation: recording ? 'pulse 0.8s infinite' : 'none' }} />
+            }
           </button>
           <button onClick={streaming ? abort : submit}
             disabled={!streaming && !input.trim()}
