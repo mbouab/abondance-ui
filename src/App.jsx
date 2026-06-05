@@ -170,13 +170,23 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('abondance_user')) } catch { return null }
   })
+  const [fadein, setFadein] = useState(false)
+
+  function handleLogin(u) {
+    setUser(u)
+    setTimeout(() => setFadein(true), 50)
+  }
+
+  useEffect(() => {
+    if (user) setFadein(true)
+  }, [])
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const restaurant = RESTAURANTS[restaurantIdx]
 
-  if (!user) return <LoginScreen onLogin={setUser} />
+  if (!user) return <LoginScreen onLogin={handleLogin} />
 
   function logout() {
     localStorage.removeItem('abondance_user')
@@ -265,7 +275,7 @@ export default function App() {
   const isEmpty = messages.length === 0
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', maxWidth: '900px', margin: '0 auto', position: 'relative', opacity: fadein ? 1 : 0, transition: 'opacity 0.3s ease' }}>
 
       {/* Ambient glow */}
       <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: 600, height: 300, background: 'radial-gradient(ellipse at 50% 0%, rgba(200,169,110,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
