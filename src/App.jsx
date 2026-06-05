@@ -285,7 +285,7 @@ export default function App() {
 
         {/* User + logout */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-          <span style={{ fontSize: 12, color: 'var(--muted2)' }}>{user.name}</span>
+          <span style={{ fontSize: 12, color: 'var(--muted2)' }}>{user?.name}</span>
           <button onClick={logout} style={{ fontSize: 11, color: 'var(--muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', letterSpacing: '.04em' }}>DÉCO</button>
         </div>
 
